@@ -29,13 +29,13 @@ export enum ViewState {
   MEMORIZE = 'MEMORIZE',
   RAMADAN = 'RAMADAN',
   SETTINGS = 'SETTINGS',
-  WIDGET = 'WIDGET',
   AI_CHAT = 'AI_CHAT',
   NAMES99 = 'NAMES99',
   BREATHWORK = 'BREATHWORK',
   JANAZAH = 'JANAZAH',
   TIBB = 'TIBB',
-  WORD_QURAN = 'WORD_QURAN'
+  WORD_QURAN = 'WORD_QURAN',
+  WIDGET = 'WIDGET'
 }
 
 export type SubView = 'DAILY' | 'STATS' | 'AWARDS';
@@ -79,6 +79,14 @@ export interface Exercise {
   sets: number;
 }
 
+export interface QuranPlan {
+  active: boolean;
+  startDate: string;
+  targetDays: number;
+  currentParah: number;
+  pagesPerDay: number;
+}
+
 export interface DailyStats {
   date: string; // YYYY-MM-DD
   prayers: Prayer[];
@@ -104,6 +112,15 @@ export interface DailyStats {
     ayatulKursi: boolean;
     fourQuls: boolean;
   };
+  
+  // Sleep Tracker
+  sleep: {
+    hours: number;
+    wudu: boolean;
+    rightSide: boolean;
+    tahajjudIntent: boolean;
+  };
+
   journal: string; // Gratitude journal
 
   // Hadees
@@ -178,6 +195,13 @@ export interface GlobalStats {
     tibb: boolean;
     surahsLearned: string[];
   };
+  quranPlan: QuranPlan;
+  location: {
+    lat: number | null;
+    lng: number | null;
+    city: string | null;
+    prayerTimes: Record<string, string> | null;
+  };
   streakFreezes: number;
   freezeModeUntil: number | null; // New: For Travel/Sick mode
   qadaBank: number;
@@ -222,6 +246,7 @@ export const INITIAL_DAILY_STATE: DailyStats = {
   customDhikr: [],
   quranParts: { rub: false, nisf: false, thalatha: false, kamil: false },
   night: { surahMulk: false, surahBaqarah: false, tasbihFatima: false, ayatulKursi: false, fourQuls: false },
+  sleep: { hours: 0, wudu: false, rightSide: false, tahajjudIntent: false },
   journal: "",
   hadeesRead: false,
   hygiene: { shower: false, brush: false, cleanDesk: false, waterGlasses: 0 },
@@ -242,6 +267,8 @@ export const INITIAL_GLOBAL_STATE: GlobalStats = {
     maxSalah: 0, maxDhikr: 0, maxMdf: 0, maxFitness: 0, maxHygiene: 0, maxHabits: 0, maxQuran: 0, maxRamadan: 0, maxHadees: 0, maxNight: 0
   },
   knowledge: { janazah: false, tibb: false, surahsLearned: [] },
+  quranPlan: { active: false, startDate: "", targetDays: 30, currentParah: 1, pagesPerDay: 20 },
+  location: { lat: null, lng: null, city: null, prayerTimes: null },
   streakFreezes: 1,
   freezeModeUntil: null,
   qadaBank: 0,

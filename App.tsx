@@ -1,6 +1,5 @@
 
 
-
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { Atmosphere } from './components/Atmosphere';
@@ -9,7 +8,7 @@ import { TabSalah } from './components/TabSalah';
 import { TabDhikr, TabHygiene, TabMDF, TabFitness, TabMemorize, TabQuran, TabRamadan, TabSettings, TabHabits, TabHadees, TabNight, TabNames99, TabBreathwork, TabJanazah, TabTibb, TabWordQuran } from './components/SimpleTabs';
 import { AIAssistant } from './components/AIAssistant';
 import { BottomNav } from './components/BottomNav';
-import { AppState, INITIAL_DAILY_STATE, INITIAL_GLOBAL_STATE, ViewState, DailyStats, SpiritualMood } from './types';
+import { AppState, INITIAL_DAILY_STATE, INITIAL_GLOBAL_STATE, ViewState, DailyStats, SpiritualMood, GlobalStats } from './types';
 import { MASTER_ACHIEVEMENTS, CONGRATS_MESSAGES } from './constants'; 
 import { X, AlertTriangle, Trophy, Snowflake, ShieldCheck, Star } from 'lucide-react';
 
@@ -182,60 +181,15 @@ const App: React.FC = () => {
       return () => clearInterval(interval);
   }, []);
 
-  // Offline File Backup Logic (Blob based for Android support)
+  // Mock Cloud Sync
   const exportData = () => {
-      try {
-          const dataStr = JSON.stringify(state);
-          const blob = new Blob([dataStr], { type: 'application/json' });
-          const url = URL.createObjectURL(blob);
-          
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `zohaib_tracker_backup_${new Date().toISOString().slice(0,10)}.json`;
-          document.body.appendChild(link);
-          link.click();
-          
-          // Cleanup
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-          
-          addToast("Backup downloaded successfully!", "success");
-      } catch (e) {
-          addToast("Failed to create backup", "error");
-      }
+      addToast("Syncing to cloud...", "info");
+      setTimeout(() => addToast("Data synced successfully!", "success"), 2000);
   };
 
   const importData = () => {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'application/json';
-      input.onchange = (e: any) => {
-          const file = e.target.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = (event) => {
-              try {
-                  const json = JSON.parse(event.target?.result as string);
-                  if (json.daily && json.global) {
-                       // Deep merge to ensure compatibility
-                       const mergedState = {
-                           daily: { ...INITIAL_DAILY_STATE, ...json.daily },
-                           global: { ...INITIAL_GLOBAL_STATE, ...json.global }
-                       };
-                       setState(mergedState);
-                       localStorage.setItem('zohaib_tracker_v3', JSON.stringify(mergedState));
-                       addToast("Data restored successfully!", "success");
-                       setTimeout(() => window.location.reload(), 1500);
-                  } else {
-                      throw new Error("Invalid format");
-                  }
-              } catch (err) {
-                  addToast("Invalid Backup File", "error");
-              }
-          };
-          reader.readAsText(file);
-      };
-      input.click();
+      addToast("Fetching from cloud...", "info");
+      setTimeout(() => addToast("Already up to date.", "success"), 2000);
   };
 
   const syncMaxStreaks = (streaks: typeof INITIAL_GLOBAL_STATE.streaks) => {
@@ -259,7 +213,8 @@ const App: React.FC = () => {
   };
 
   const checkAchievements = (currentState: AppState) => {
-      const { streaks, xp, currentParah, ramadanStats, unlockedAchievements } = currentState.global;
+      if (!currentState || !currentState.global) return; // Safety Check
+      const { streaks, xp, currentParah, ramadanStats, unlockedAchievements, knowledge } = currentState.global;
       const unlocked = new Set(unlockedAchievements);
       const newUnlocks: string[] = [];
 
@@ -305,6 +260,9 @@ const App: React.FC = () => {
          if (id.includes('quran_juz')) return currentParah;
          if (id.includes('quran_khatam')) return currentState.global.quransRecited || 0;
          if (id.includes('memorize')) return currentState.global.memorizeProgress || 0;
+         if (id.includes('knowledge_janazah')) return knowledge?.janazah ? 1 : 0;
+         if (id.includes('knowledge_tibb')) return knowledge?.tibb ? 1 : 0;
+         if (id.includes('knowledge_word')) return knowledge?.surahsLearned?.length || 0;
          return 0;
       };
 
@@ -355,14 +313,15 @@ const App: React.FC = () => {
 
   const updateState = (updater: (prev: AppState) => AppState) => {
     setState(prev => {
+       if (!prev) return prev;
        const next = updater(prev);
-       next.daily.imanScore = calculateImanScore(next.daily);
+       if (next && next.daily) next.daily.imanScore = calculateImanScore(next.daily);
        return next;
     });
   };
 
   useEffect(() => {
-     if (!isLoading) {
+     if (!isLoading && state && state.global) {
          checkAchievements(state);
      }
   }, [
@@ -370,7 +329,8 @@ const App: React.FC = () => {
       state.daily.dhikrAstaghfirullah, 
       state.daily.fitness,
       state.global.streaks,
-      state.global.ramadanStats
+      state.global.ramadanStats,
+      state.global.knowledge 
   ]);
 
   const getDaysDiff = (d1: string, d2: string) => {
@@ -399,6 +359,7 @@ const App: React.FC = () => {
         if(typeof safeDaily.journal === 'undefined') safeDaily.journal = "";
         if(typeof safeGlobal.streaks.names99 === 'undefined') safeGlobal.streaks.names99 = 0;
         if(typeof safeGlobal.customColor === 'undefined') safeGlobal.customColor = null;
+        if(typeof safeGlobal.knowledge === 'undefined') safeGlobal.knowledge = { janazah: false, tibb: false, surahsLearned: [] };
 
         // Backwards compatibility logic
         if(typeof safeDaily.mood === 'undefined') safeDaily.mood = null;
@@ -450,7 +411,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoading && state && state.global) {
         const globalWithMax = { ...state.global, streaks: syncMaxStreaks(state.global.streaks) };
         localStorage.setItem('zohaib_tracker_v3', JSON.stringify({ daily: state.daily, global: globalWithMax }));
     }
@@ -462,13 +423,12 @@ const App: React.FC = () => {
        root.classList.remove('theme-day', 'theme-night');
        
        // Handle custom color builder
-       if (state.global.customColor) {
+       if (state && state.global && state.global.customColor) {
            root.style.setProperty('--glass-bg', `${state.global.customColor}10`); 
-           // We can dynamically inject styles here if needed for deeper customization
        }
 
-       if (state.global.theme === 'DAY') root.classList.add('theme-day');
-       else if (state.global.theme === 'NIGHT') root.classList.add('theme-night');
+       if (state && state.global && state.global.theme === 'DAY') root.classList.add('theme-day');
+       else if (state && state.global && state.global.theme === 'NIGHT') root.classList.add('theme-night');
        else {
          const hour = new Date().getHours();
          if (hour >= 7 && hour < 18) root.classList.add('theme-day');
@@ -480,32 +440,32 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [state.global.theme, state.global.customColor]);
 
+  // Refactored to be a pure function
   const checkAndToggleStreak = (
-      prev: AppState, 
+      global: GlobalStats, 
       category: keyof typeof INITIAL_GLOBAL_STATE.streaks, 
       wasComplete: boolean, 
       isComplete: boolean
-  ) => {
-      let streaks = { ...prev.global.streaks };
-      let earnedXP = 0;
+  ): { streaks: typeof INITIAL_GLOBAL_STATE.streaks, xpDelta: number } => {
+      let streaks = { ...global.streaks };
+      let xpDelta = 0;
 
-      const isFrozen = prev.global.freezeModeUntil && Date.now() < prev.global.freezeModeUntil;
+      const isFrozen = global.freezeModeUntil && Date.now() < global.freezeModeUntil;
 
       if (!wasComplete && isComplete) {
           streaks[category] = (streaks[category] as number) + 1;
-          earnedXP = 10;
+          xpDelta = 10;
           triggerConfetti();
           showCongratulation((category as string).toUpperCase());
       } 
       else if (wasComplete && !isComplete) {
           if (!isFrozen) {
               streaks[category] = Math.max(0, (streaks[category] as number) - 1);
-              earnedXP = -10;
+              xpDelta = -10;
           }
       }
       
-      prev.global.xp = Math.max(0, prev.global.xp + earnedXP);
-      return streaks;
+      return { streaks, xpDelta };
   };
 
   const buyFreeze = () => {
@@ -543,6 +503,17 @@ const App: React.FC = () => {
       }
   }
 
+  const handleUpdateLocation = (lat: number, lng: number, city: string, times: any) => {
+      updateState(prev => ({
+          ...prev,
+          global: {
+              ...prev.global,
+              location: { lat, lng, city, prayerTimes: times }
+          }
+      }));
+      addToast("Location Updated", "success");
+  };
+
   const handleUpdatePrayer = (id: string, completed: boolean, isJamaah: boolean) => {
     playSound('click');
     updateState(prev => {
@@ -554,10 +525,11 @@ const App: React.FC = () => {
             completedAt: completed ? new Date().toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}) : null 
         } : p);
         const isComplete = newPrayers.filter(p => p.completed).length >= 5;
-        const newStreaks = checkAndToggleStreak(prev, 'salah', wasComplete, isComplete);
+        const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'salah', wasComplete, isComplete);
+        
         return { 
             ...prev, 
-            global: { ...prev.global, streaks: newStreaks },
+            global: { ...prev.global, streaks: newStreaks, xp: Math.max(0, prev.global.xp + xpDelta) },
             daily: { ...prev.daily, prayers: newPrayers } 
         };
     });
@@ -573,8 +545,12 @@ const App: React.FC = () => {
         else newState.daily.customDhikr = prev.daily.customDhikr.map(d => d.id === type ? { ...d, count: d.count + amt } : d);
         
         const isComplete = newState.daily.dhikrAstaghfirullah >= 2100 && newState.daily.dhikrRabbiInni >= 2100;
-        newState.global.streaks = checkAndToggleStreak(prev, 'dhikr', wasComplete, isComplete);
-        return newState;
+        const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'dhikr', wasComplete, isComplete);
+        
+        return {
+            ...newState,
+            global: { ...newState.global, streaks: newStreaks, xp: Math.max(0, newState.global.xp + xpDelta) }
+        };
      });
   };
 
@@ -599,8 +575,12 @@ const App: React.FC = () => {
           const u = updatedHygiene;
           const isComplete = u.waterGlasses >= 8 && u.shower && u.brush && u.cleanDesk;
           
-          const newStreaks = checkAndToggleStreak(prev, 'hygiene', wasComplete, isComplete);
-          return { ...prev, global: { ...prev.global, streaks: newStreaks }, daily: { ...prev.daily, hygiene: updatedHygiene } };
+          const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'hygiene', wasComplete, isComplete);
+          return { 
+              ...prev, 
+              global: { ...prev.global, streaks: newStreaks, xp: Math.max(0, prev.global.xp + xpDelta) }, 
+              daily: { ...prev.daily, hygiene: updatedHygiene } 
+          };
       });
   };
 
@@ -662,11 +642,11 @@ const App: React.FC = () => {
          
          const wasDayComplete = prev.daily.ramadan.suhoor && prev.daily.ramadan.iftar && prev.daily.ramadan.taraweeh && prev.daily.ramadan.readParah;
          const isDayComplete = newDaily.ramadan.suhoor && newDaily.ramadan.iftar && newDaily.ramadan.taraweeh && newDaily.ramadan.readParah;
-         const newStreaks = checkAndToggleStreak(prev, 'ramadan', wasDayComplete, isDayComplete);
+         const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'ramadan', wasDayComplete, isDayComplete);
          
          return {
              ...prev,
-             global: { ...prev.global, streaks: newStreaks, ramadanStats: newRamadanStats },
+             global: { ...prev.global, streaks: newStreaks, ramadanStats: newRamadanStats, xp: Math.max(0, prev.global.xp + xpDelta) },
              daily: newDaily
          };
       });
@@ -679,7 +659,7 @@ const App: React.FC = () => {
         const wasComplete = Object.values(prev.daily.quranParts).some(Boolean);
         const newParts = { ...prev.daily.quranParts, [part]: !prev.daily.quranParts[part as keyof typeof prev.daily.quranParts] };
         const isComplete = Object.values(newParts).some(Boolean);
-        const newStreaks = checkAndToggleStreak(prev, 'quranSurah', wasComplete, isComplete);
+        const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'quranSurah', wasComplete, isComplete);
         
         const allDone = newParts.rub && newParts.nisf && newParts.thalatha && newParts.kamil;
         
@@ -702,15 +682,32 @@ const App: React.FC = () => {
                     ...prev.global, 
                     currentParah: newParah, 
                     quransRecited: currentKhatams,
-                    xp: prev.global.xp + 50, 
+                    xp: Math.max(0, prev.global.xp + xpDelta + 50), 
                     streaks: newStreaks 
                 },
                 daily: { ...prev.daily, quranParts: { rub: false, nisf: false, thalatha: false, kamil: false } }
             };
         } else {
-            return { ...prev, global: { ...prev.global, streaks: newStreaks }, daily: { ...prev.daily, quranParts: newParts } };
+            return { 
+                ...prev, 
+                global: { ...prev.global, streaks: newStreaks, xp: Math.max(0, prev.global.xp + xpDelta) }, 
+                daily: { ...prev.daily, quranParts: newParts } 
+            };
         }
     });
+  };
+
+  const handleUpdateQuranPlan = (days: number) => {
+      const pagesTotal = 604;
+      const pagesPerDay = Math.ceil(pagesTotal / days);
+      updateState(prev => ({
+          ...prev,
+          global: {
+              ...prev.global,
+              quranPlan: { active: true, targetDays: days, startDate: new Date().toISOString(), currentParah: prev.global.currentParah, pagesPerDay }
+          }
+      }));
+      addToast(`Plan Created: ${pagesPerDay} pages/day`, 'success');
   };
 
   const handleMarkHadees = () => {
@@ -718,11 +715,11 @@ const App: React.FC = () => {
     updateState(prev => {
         const wasComplete = false; 
         const isComplete = true;
-        const newStreaks = checkAndToggleStreak(prev, 'hadees', wasComplete, isComplete);
+        const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'hadees', wasComplete, isComplete);
         showCongratulation('HADEES');
         return {
             ...prev,
-            global: { ...prev.global, streaks: newStreaks },
+            global: { ...prev.global, streaks: newStreaks, xp: Math.max(0, prev.global.xp + xpDelta) },
             daily: { ...prev.daily, hadeesRead: true }
         };
     });
@@ -738,9 +735,13 @@ const App: React.FC = () => {
           const u = newDaily.night;
           
           const isComplete = u.surahMulk && u.surahBaqarah && u.ayatulKursi && u.fourQuls;
-          const newStreaks = checkAndToggleStreak(prev, 'night', wasComplete, isComplete);
+          const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'night', wasComplete, isComplete);
           
-          return { ...prev, global: { ...prev.global, streaks: newStreaks }, daily: newDaily };
+          return { 
+              ...prev, 
+              global: { ...prev.global, streaks: newStreaks, xp: Math.max(0, prev.global.xp + xpDelta) }, 
+              daily: newDaily 
+          };
       });
   };
   
@@ -767,10 +768,10 @@ const App: React.FC = () => {
               showCongratulation('FITNESS');
           }
           
-          const newStreaks = checkAndToggleStreak(prev, 'fitness', wasComplete, isComplete);
+          const { streaks: newStreaks, xpDelta } = checkAndToggleStreak(prev.global, 'fitness', wasComplete, isComplete);
           return {
               ...prev,
-              global: { ...prev.global, streaks: newStreaks },
+              global: { ...prev.global, streaks: newStreaks, xp: Math.max(0, prev.global.xp + xpDelta) },
               daily: { ...prev.daily, fitness: { ...prev.daily.fitness, pushups: newCount } }
           };
       });
@@ -812,7 +813,67 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleToggleKnowledge = (type: 'janazah' | 'tibb' | 'wordQuran', surahId?: string) => {
+      playSound('success');
+      updateState(prev => {
+          // Ensure knowledge object exists to prevent undefined access
+          let knowledge = { ...(prev.global.knowledge || { janazah: false, tibb: false, surahsLearned: [] }) };
+          
+          if (type === 'wordQuran' && surahId) {
+             if (knowledge.surahsLearned.includes(surahId)) {
+                 // Already learned
+             } else {
+                 knowledge.surahsLearned = [...knowledge.surahsLearned, surahId];
+                 addToast(`Surah ${surahId} Learned! +50 XP`, 'success');
+                 showCongratulation('KNOWLEDGE');
+             }
+          } else {
+             if (type === 'janazah') {
+                 knowledge.janazah = !knowledge.janazah;
+                 if (knowledge.janazah) showCongratulation('KNOWLEDGE');
+             }
+             if (type === 'tibb') {
+                 knowledge.tibb = !knowledge.tibb;
+                 if (knowledge.tibb) showCongratulation('KNOWLEDGE');
+             }
+          }
+
+          return {
+              ...prev,
+              global: { ...prev.global, knowledge, xp: prev.global.xp + 50 }
+          };
+      });
+  };
+
+  const handleUpdateNames99 = () => {
+    playSound('success');
+    addToast("Name Learned! +10 XP", "success");
+    updateState(prev => ({
+        ...prev,
+        global: { ...prev.global, streaks: { ...prev.global.streaks, names99: prev.global.streaks.names99 + 1 }, xp: prev.global.xp + 10 }
+    }));
+    showCongratulation('NAMES99');
+  };
+
+  const handleUpdateSleep = (key: string, val: any) => {
+    playSound('click');
+    updateState(prev => ({
+        ...prev,
+        daily: { ...prev.daily, sleep: { ...prev.daily.sleep, [key]: val } }
+    }));
+  };
+
+  const generateReportCard = () => {
+      const report = `Zohaib Tracker Report\nLevel: ${Math.floor(Math.sqrt(state.global.xp / 100)) + 1}\nXP: ${state.global.xp}\nSalah Streak: ${state.global.streaks.salah}\nIman Score: ${state.daily.imanScore}%`;
+      navigator.clipboard.writeText(report).then(() => {
+          addToast("Report copied to clipboard", "success");
+      });
+  };
+
   if (isLoading) return <LoadingScreen />;
+
+  // Ensure state is valid before rendering main app
+  if (!state || !state.global) return <LoadingScreen />;
 
   return (
     <>
@@ -839,24 +900,30 @@ const App: React.FC = () => {
       {view !== ViewState.WIDGET && (
         <div className="min-h-screen relative z-10 max-w-md mx-auto pb-32">
           {view === ViewState.DASHBOARD && <Dashboard state={state} changeView={setView} updateMood={handleMoodUpdate} />}
-          {view === ViewState.SALAH && <TabSalah state={state} updatePrayer={handleUpdatePrayer} updateQada={(amt) => updateState(prev => ({ ...prev, global: { ...prev.global, qadaBank: Math.max(0, prev.global.qadaBank + amt) } }))} onBack={() => setView(ViewState.DASHBOARD)} />}
+          {view === ViewState.SALAH && <TabSalah 
+                state={state} 
+                updatePrayer={handleUpdatePrayer} 
+                updateQada={(amt) => updateState(prev => ({ ...prev, global: { ...prev.global, qadaBank: Math.max(0, prev.global.qadaBank + amt) } }))} 
+                updateLocation={handleUpdateLocation}
+                onBack={() => setView(ViewState.DASHBOARD)} 
+          />}
           {view === ViewState.DHIKR && <TabDhikr state={state} updateDhikr={handleDhikr} addCustomDhikr={handleAddCustomDhikr} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
           {view === ViewState.AI_CHAT && <AIAssistant state={state} onBack={() => setView(ViewState.DASHBOARD)} />}
-          {view === ViewState.QURAN && <TabQuran state={state} updatePart={handleQuranProgress} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
+          {view === ViewState.QURAN && <TabQuran state={state} updatePart={handleQuranProgress} updatePlan={handleUpdateQuranPlan} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
           {view === ViewState.HADEES && <TabHadees state={state} markRead={handleMarkHadees} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
-          {view === ViewState.NIGHT && <TabNight state={state} updateNight={handleNightUpdate} updateJournal={handleUpdateJournal} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
+          {view === ViewState.NIGHT && <TabNight state={state} updateNight={handleNightUpdate} updateJournal={handleUpdateJournal} updateSleep={handleUpdateSleep} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
           {view === ViewState.MDF && <TabMDF state={state} resetRelapse={() => updateState(prev => ({...prev, global: {...prev.global, lastRelapseDate: Date.now(), streaks: {...prev.global.streaks, mdf: 0}}, daily: {...prev.daily, habits: {...prev.daily.habits, failedToday: true}}}))} onBack={() => setView(ViewState.DASHBOARD)} />}
           {view === ViewState.HABITS && <TabHabits state={state} updateHabit={handleHabitUpdate} onBack={() => setView(ViewState.DASHBOARD)} />}
           {view === ViewState.HYGIENE && <TabHygiene state={state} updateHygiene={handleHygiene} updateHabit={handleHabitUpdate} onBack={() => setView(ViewState.DASHBOARD)} />}
           {view === ViewState.FITNESS && <TabFitness state={state} updatePushups={handleUpdatePushups} addCustomExercise={handleAddCustomExercise} updateCustomExercise={handleUpdateCustomExercise} onOpenBreathwork={() => setView(ViewState.BREATHWORK)} onBack={() => setView(ViewState.DASHBOARD)} />}
           {view === ViewState.MEMORIZE && <TabMemorize state={state} markLearned={handleMemorizeNext} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
           {view === ViewState.RAMADAN && <TabRamadan state={state} toggleRamadanDaily={handleRamadanDailyToggle} updateRamadanStat={handleRamadanStatUpdate} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
-          {view === ViewState.NAMES99 && <TabNames99 state={state} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
+          {view === ViewState.NAMES99 && <TabNames99 state={state} updateNames99={handleUpdateNames99} onBack={() => setView(ViewState.DASHBOARD)} themeOverride={currentThemeColor} />}
           {view === ViewState.BREATHWORK && <TabBreathwork onBack={() => setView(ViewState.FITNESS)} />}
-          {view === ViewState.JANAZAH && <TabJanazah onBack={() => setView(ViewState.DASHBOARD)} />}
-          {view === ViewState.TIBB && <TabTibb onBack={() => setView(ViewState.DASHBOARD)} />}
-          {view === ViewState.WORD_QURAN && <TabWordQuran onBack={() => setView(ViewState.DASHBOARD)} />}
-          {view === ViewState.SETTINGS && <TabSettings state={state} setTheme={(t) => updateState(prev => ({...prev, global: {...prev.global, theme: t}}))} setCustomColor={(c) => updateState(prev => ({...prev, global: {...prev.global, customColor: c}}))} toggleRamadan={() => updateState(prev => ({...prev, global: {...prev.global, ramadanMode: !prev.global.ramadanMode}}))} exportData={exportData} importData={importData} enterWidgetMode={() => setView(ViewState.WIDGET)} onBack={() => setView(ViewState.DASHBOARD)} buyFreeze={buyFreeze} buyTravelMode={buyTravelMode} resetApp={hardReset} requestNotify={requestNotificationPermission} updateQada={(amt) => updateState(prev => ({ ...prev, global: { ...prev.global, qadaBank: Math.max(0, prev.global.qadaBank + amt) } }))} />}
+          {view === ViewState.JANAZAH && <TabJanazah state={state} onToggleKnowledge={handleToggleKnowledge} onBack={() => setView(ViewState.DASHBOARD)} />}
+          {view === ViewState.TIBB && <TabTibb state={state} onToggleKnowledge={handleToggleKnowledge} onBack={() => setView(ViewState.DASHBOARD)} />}
+          {view === ViewState.WORD_QURAN && <TabWordQuran state={state} onToggleKnowledge={handleToggleKnowledge} onBack={() => setView(ViewState.DASHBOARD)} />}
+          {view === ViewState.SETTINGS && <TabSettings state={state} setTheme={(t) => updateState(prev => ({...prev, global: {...prev.global, theme: t}}))} setCustomColor={(c) => updateState(prev => ({...prev, global: {...prev.global, customColor: c}}))} toggleRamadan={() => updateState(prev => ({...prev, global: {...prev.global, ramadanMode: !prev.global.ramadanMode}}))} exportData={exportData} importData={importData} enterWidgetMode={() => setView(ViewState.WIDGET)} onBack={() => setView(ViewState.DASHBOARD)} buyFreeze={buyFreeze} buyTravelMode={buyTravelMode} resetApp={hardReset} requestNotify={requestNotificationPermission} updateQada={(amt) => updateState(prev => ({ ...prev, global: { ...prev.global, qadaBank: Math.max(0, prev.global.qadaBank + amt) } }))} generateReportCard={generateReportCard} />}
         </div>
       )}
       

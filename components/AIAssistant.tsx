@@ -1,8 +1,6 @@
-
-
 import * as React from 'react';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, User, Bot, Loader2, Trash2, WifiOff } from 'lucide-react';
+import { Send, Sparkles, User, Bot, Loader2, Trash2, WifiOff, Lightbulb } from 'lucide-react';
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import { TabWrapper, HeroCard, RANK_IMAGES } from './SimpleTabs';
 import { AppState } from '../types';
@@ -99,6 +97,42 @@ export const AIAssistant: React.FC<Props> = ({ state, onBack }) => {
     }
   };
 
+  const generateReflection = async () => {
+    if (isLoading || !navigator.onLine) return;
+    
+    setIsLoading(true);
+    // Add a ghost user message to show context
+    setMessages(prev => [...prev, { role: 'user', text: "✨ Generate my daily spiritual reflection." }]);
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const prompt = `
+            Analyze these stats for Zohaib and provide a personalized reflection:
+            - Salah Streak: ${state.global.streaks.salah} days
+            - Dhikr Total Today: ${state.daily.dhikrAstaghfirullah + state.daily.dhikrRabbiInni}
+            - Iman Score: ${state.daily.imanScore}%
+            - Mood: ${state.daily.mood || 'Neutral'}
+            
+            Task: Provide a compassionate, 50-word spiritual reflection to motivate him. 
+            Then, provide ONE specific, actionable Sunnah or habit to focus on tomorrow.
+            End with a short, beautiful Dua in English.
+        `;
+        
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt
+        });
+        
+        const text = response.text;
+        setMessages(prev => [...prev, { role: 'model', text: text }]);
+    } catch (e) {
+        const fallback = OFFLINE_AI_RESPONSES[Math.floor(Math.random() * OFFLINE_AI_RESPONSES.length)];
+        setMessages(prev => [...prev, { role: 'model', text: `(Offline) ${fallback}` }]);
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
   const getSuggestions = () => {
       const s = [];
       const hour = new Date().getHours();
@@ -172,12 +206,23 @@ export const AIAssistant: React.FC<Props> = ({ state, onBack }) => {
 
         {/* Suggestions */}
         {messages.length < 4 && !isLoading && (
-            <div className="flex flex-wrap gap-2 mt-6 px-2 justify-center">
-                {getSuggestions().map((s, i) => (
-                    <button key={i} onClick={() => { setInput(s); setTimeout(handleSend, 100); }} className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/5 text-[10px] font-bold uppercase tracking-wider text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95 hover:border-white/20">
-                        {s}
+            <div className="flex flex-col items-center gap-3 mt-6 px-2">
+                <div className="flex flex-wrap gap-2 justify-center">
+                    {getSuggestions().map((s, i) => (
+                        <button key={i} onClick={() => { setInput(s); setTimeout(handleSend, 100); }} className="px-4 py-2.5 rounded-xl bg-white/5 border border-white/5 text-[10px] font-bold uppercase tracking-wider text-slate-300 hover:bg-white/10 hover:text-white transition-all active:scale-95 hover:border-white/20">
+                            {s}
+                        </button>
+                    ))}
+                </div>
+                
+                {navigator.onLine && (
+                    <button 
+                        onClick={generateReflection}
+                        className="flex items-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500/20 to-amber-600/20 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider hover:bg-amber-500/30 active:scale-95 transition-all shadow-lg shadow-amber-900/10"
+                    >
+                        <Lightbulb size={16} /> Generate Daily Reflection
                     </button>
-                ))}
+                )}
             </div>
         )}
 

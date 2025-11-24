@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { useState } from 'react';
-import { Moon, CheckCircle2, Users, Clock, BarChart2, AlertTriangle } from 'lucide-react';
+import { Moon, CheckCircle2, Users, Clock, BarChart2, AlertTriangle, MapPin, Loader2 } from 'lucide-react';
 import { AppState, SubView } from '../types';
 import { getGrowthStage } from '../constants';
 import { BarChart } from './Charts';
@@ -11,17 +11,51 @@ interface Props {
   state: AppState;
   updatePrayer: (id: string, isComplete: boolean, isJamaah: boolean) => void;
   updateQada: (amount: number) => void;
+  updateLocation: (lat: number, lng: number, city: string, times: any) => void;
   onBack: () => void;
   themeOverride?: string;
 }
 
-export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, onBack, themeOverride }) => {
+export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, updateLocation, onBack, themeOverride }) => {
   const [subView, setSubView] = useState<SubView>('DAILY');
+  const [loadingLoc, setLoadingLoc] = useState(false);
   const streak = state.global.streaks.salah;
   const maxStreak = state.global.streaks.maxSalah || streak;
   const stage = getGrowthStage('SALAH', streak);
   const isFriday = new Date().getDay() === 5;
   const themeColor = themeOverride || "emerald";
+
+  const fetchPrayerTimes = () => {
+      setLoadingLoc(true);
+      if (!navigator.geolocation) {
+          alert("Geolocation is not supported by your browser");
+          setLoadingLoc(false);
+          return;
+      }
+
+      navigator.geolocation.getCurrentPosition(async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+              // Using Aladhan API
+              const date = new Date();
+              const response = await fetch(`https://api.aladhan.com/v1/timings/${date.getDate()}-${date.getMonth() + 1}-${date.getFullYear()}?latitude=${latitude}&longitude=${longitude}&method=2`);
+              const data = await response.json();
+              
+              if (data.code === 200) {
+                  const timings = data.data.timings;
+                  // Get city name via reverse geocoding (optional, simplifed here to generic)
+                  updateLocation(latitude, longitude, "Current Location", timings);
+              }
+          } catch (e) {
+              console.error("Failed to fetch times", e);
+          } finally {
+              setLoadingLoc(false);
+          }
+      }, () => {
+          alert("Unable to retrieve your location");
+          setLoadingLoc(false);
+      });
+  };
 
   const renderStats = () => {
     const history = state.global.history ? state.global.history.slice(-7) : [];
@@ -59,6 +93,8 @@ export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, onB
 
   const renderDaily = () => {
     const nextPrayer = state.daily.prayers.find(p => !p.completed);
+    const times = state.global.location.prayerTimes;
+
     return (
     <div className="space-y-4 animate-slide-up pb-10">
       <HeroCard 
@@ -69,12 +105,32 @@ export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, onB
         icon={<Moon size={14} />} 
         bgImage={isFriday ? JUMUAH_IMAGE : RANK_IMAGES.SALAH} 
       />
+
+      {/* Geolocation Fetcher */}
+      <div className="flex justify-between items-center glass-panel p-4 rounded-2xl border-emerald-500/10 mb-2">
+           <div className="flex items-center gap-3">
+               <div className="p-2 bg-emerald-500/10 rounded-full text-emerald-400"><MapPin size={18}/></div>
+               <div>
+                   <div className="text-xs font-bold text-white">{state.global.location.city || "Set Location"}</div>
+                   <div className="text-[10px] text-secondary">For accurate times</div>
+               </div>
+           </div>
+           <button 
+              onClick={fetchPrayerTimes} 
+              disabled={loadingLoc}
+              className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-900/20 active:scale-95 transition-all flex items-center gap-2"
+           >
+              {loadingLoc && <Loader2 size={12} className="animate-spin"/>}
+              {loadingLoc ? "Fetching..." : "Update"}
+           </button>
+      </div>
       
       <div className="space-y-3">
         {state.daily.prayers.map((prayer, idx) => {
            const isNext = !prayer.completed && (idx === 0 || state.daily.prayers[idx-1].completed);
-           const displayName = (isFriday && prayer.id === 'dhuhr') ? 'Jumuah' : prayer.name;
+           // const displayName = (isFriday && prayer.id === 'dhuhr') ? 'Jumuah' : prayer.name; // REMOVED ENGLISH
            const displayUrdu = (isFriday && prayer.id === 'dhuhr') ? 'جمعہ' : prayer.urduName;
+           const time = times ? times[prayer.name === 'Tahajjud' ? 'Imsak' : prayer.name] : null; // Tahajjud approx
 
            return (
           <div 
@@ -104,7 +160,9 @@ export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, onB
                 
                 <div className="flex flex-col items-end">
                      <span className={`text-3xl font-serif font-bold drop-shadow-sm transition-colors duration-300 ${prayer.completed ? `text-${themeColor}-400` : 'text-primary'}`}>{displayUrdu}</span>
-                     <span className="text-xs font-bold uppercase tracking-wider text-secondary/60 mt-1">{displayName}</span>
+                     <div className="flex items-center gap-2">
+                         {time && <span className="text-[10px] bg-white/5 px-1.5 py-0.5 rounded text-white/40 mt-1">{time}</span>}
+                     </div>
                      {prayer.completed && prayer.completedAt && (
                          <div className={`flex items-center gap-1 mt-1 text-[9px] font-bold text-${themeColor}-400/80 animate-fade-in`}>
                             <Clock size={8} /> {prayer.completedAt}
