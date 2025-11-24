@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { AppState, SubView, Exercise, ViewState, QuranPlan } from '../types';
 import { MEMORIZE_CONTENT, PARAH_NAMES_ARABIC, MASTER_ACHIEVEMENTS, getGrowthStage, PREDEFINED_DHIKR, PREDEFINED_WORKOUTS, HADEES_COLLECTION, QURAN_PART_LABELS, TAB_MESSAGES, NAMES_OF_ALLAH, JANAZAH_STEPS, TIBB_REMEDIES, RECOMMENDATIONS } from '../constants';
@@ -1026,7 +1025,7 @@ export const TabSettings: React.FC<any> = ({ state, setTheme, setCustomColor, to
     return (
         <TabWrapper themeColor="slate" subView="DAILY" setSubView={()=>{}} onBack={onBack} hideSubNav>
              <div className="space-y-6 pb-20 animate-slide-up">
-                 <HeroCard title="Settings" subtitle="Control Center" stat="v3.2" statLabel="Build" icon={<Settings size={14} />} bgImage={RANK_IMAGES.MDF} />
+                 <HeroCard title="Settings" subtitle="Control Center" stat="v3.3" statLabel="Build" icon={<Settings size={14} />} bgImage={RANK_IMAGES.MDF} />
                  
                  <div className="glass-panel p-6 rounded-[2rem] border-white/5">
                      <h3 className="text-xs font-bold uppercase tracking-widest text-secondary mb-4">Appearance</h3>
@@ -1080,8 +1079,8 @@ export const TabSettings: React.FC<any> = ({ state, setTheme, setCustomColor, to
                  <div className="glass-panel p-6 rounded-[2rem] border-white/5">
                      <h3 className="text-xs font-bold uppercase tracking-widest text-secondary mb-4">Data</h3>
                      <div className="grid grid-cols-2 gap-3">
-                         <button onClick={exportData} className="py-3 bg-white/5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2"><Download size={14}/> Export</button>
-                         <button onClick={importData} className="py-3 bg-white/5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2"><Upload size={14}/> Import</button>
+                         <button onClick={() => { if(navigator.onLine) exportData(); else alert("You are offline."); }} className={`py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 ${navigator.onLine ? 'bg-white/5' : 'bg-white/5 opacity-50 cursor-not-allowed'}`}><Download size={14}/> Export</button>
+                         <button onClick={() => { if(navigator.onLine) importData(); else alert("You are offline."); }} className={`py-3 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-2 ${navigator.onLine ? 'bg-white/5' : 'bg-white/5 opacity-50 cursor-not-allowed'}`}><Upload size={14}/> Import</button>
                      </div>
                      <button onClick={resetApp} className="w-full py-4 mt-4 bg-red-900/20 border border-red-500/20 text-red-400 rounded-xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-red-900/40">
                          <Trash2 size={16}/> Hard Reset App
@@ -1089,7 +1088,7 @@ export const TabSettings: React.FC<any> = ({ state, setTheme, setCustomColor, to
                  </div>
                  
                  <div className="text-center text-[10px] text-white/20 font-mono mt-10">
-                     Zohaib Tracker v3.2 • Built with React & Tailwind
+                     Zohaib Tracker v3.3 • Built with React & Tailwind
                  </div>
              </div>
         </TabWrapper>

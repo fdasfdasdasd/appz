@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { useState } from 'react';
-import { Moon, CheckCircle2, Users, Clock, BarChart2, AlertTriangle, MapPin, Loader2 } from 'lucide-react';
+import { Moon, CheckCircle2, Users, Clock, BarChart2, AlertTriangle, MapPin, Loader2, WifiOff } from 'lucide-react';
 import { AppState, SubView } from '../types';
 import { getGrowthStage } from '../constants';
 import { BarChart } from './Charts';
@@ -26,6 +26,11 @@ export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, upd
   const themeColor = themeOverride || "emerald";
 
   const fetchPrayerTimes = () => {
+      if (!navigator.onLine) {
+          alert("You are offline. Cannot update location or prayer times.");
+          return;
+      }
+
       setLoadingLoc(true);
       if (!navigator.geolocation) {
           alert("Geolocation is not supported by your browser");
@@ -43,11 +48,11 @@ export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, upd
               
               if (data.code === 200) {
                   const timings = data.data.timings;
-                  // Get city name via reverse geocoding (optional, simplifed here to generic)
                   updateLocation(latitude, longitude, "Current Location", timings);
               }
           } catch (e) {
               console.error("Failed to fetch times", e);
+              alert("Failed to fetch prayer times. Please try again later.");
           } finally {
               setLoadingLoc(false);
           }
@@ -118,9 +123,9 @@ export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, upd
            <button 
               onClick={fetchPrayerTimes} 
               disabled={loadingLoc}
-              className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-900/20 active:scale-95 transition-all flex items-center gap-2"
+              className={`px-4 py-2 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center gap-2 ${loadingLoc ? 'bg-emerald-500/50 cursor-not-allowed' : 'bg-emerald-500 active:scale-95 shadow-emerald-900/20 text-white'}`}
            >
-              {loadingLoc && <Loader2 size={12} className="animate-spin"/>}
+              {loadingLoc ? <Loader2 size={12} className="animate-spin"/> : navigator.onLine ? null : <WifiOff size={12} />}
               {loadingLoc ? "Fetching..." : "Update"}
            </button>
       </div>
@@ -128,7 +133,6 @@ export const TabSalah: React.FC<Props> = ({ state, updatePrayer, updateQada, upd
       <div className="space-y-3">
         {state.daily.prayers.map((prayer, idx) => {
            const isNext = !prayer.completed && (idx === 0 || state.daily.prayers[idx-1].completed);
-           // const displayName = (isFriday && prayer.id === 'dhuhr') ? 'Jumuah' : prayer.name; // REMOVED ENGLISH
            const displayUrdu = (isFriday && prayer.id === 'dhuhr') ? 'جمعہ' : prayer.urduName;
            const time = times ? times[prayer.name === 'Tahajjud' ? 'Imsak' : prayer.name] : null; // Tahajjud approx
 
